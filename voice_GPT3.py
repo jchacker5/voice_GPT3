@@ -2,12 +2,20 @@ import openai, whisper
 import sounddevice as sd
 import soundfile as sf
 import config
+import pyttsx3
+import os 
 # Set up OpenAI credentials
 openai.api_key = config.api_key
 
 # Define trigger word and phrase for activation
-TRIGGER_WORD = "hey assistant"
-ACTIVATION_PHRASE = "how can I help you?"
+TRIGGER_WORD = "sarah"
+ACTIVATION_PHRASE = "how can I help you, Dre?"
+# Initialize the TTS engine
+engine = pyttsx3.init('sapi5')
+
+# Set the TTS voice
+voices = engine.getProperty('voices')
+engine.setProperty('voice', voices[0].id) # you can change the voice by changing the index value
 
 # Define sample rate and duration for audio recording
 SAMPLE_RATE = 16000
@@ -19,7 +27,7 @@ def transcribe_audio_to_text(audio_path):
         engine="davinci-whisper-1",
         prompt=f"Transcribe the following audio file: {audio_path}",
         temperature=0,
-        max_tokens=1024,
+        max_tokens=4024,
     )
 
     return response.choices[0].text.strip()
@@ -39,7 +47,11 @@ def generate_response(prompt):
 def main():
     while True:
         # Listen for trigger word
-        print("Listening for trigger word...")
+        print("Say sarah to activate the voice assistant...")
+        # Speak the text
+        engine.say("Hello, how can I help you?")
+        engine.runAndWait()
+        
         recording = sd.rec(int(DURATION * SAMPLE_RATE), samplerate=SAMPLE_RATE, channels=1)
         sd.wait()
         sf.write("input.wav", recording, SAMPLE_RATE)
