@@ -1,88 +1,72 @@
-import openai
-import pyttsx3
-import speech_recognition as sr
+import openai, whisper 
+import sounddevice as sd
+import soundfile as sf
 import config
-import requests
-import json
+# Set up OpenAI credentials
+openai.api_key = config.api_key
 
-# Set up the OpenAI API client
-openai.api_key = config.whisper_api_key
+# Define trigger word and phrase for activation
+TRIGGER_WORD = "hey assistant"
+ACTIVATION_PHRASE = "how can I help you?"
 
-# intialize text to speech engine
-engine = pyttsx3.init()
-engine.setProperty('rate', 150)
+# Define sample rate and duration for audio recording
+SAMPLE_RATE = 16000
+DURATION = 5  # seconds
 
+# Define function for transcribing audio to text using OpenAI Whisper API
+def transcribe_audio_to_text(audio_path):
+    response = openai.Completion.create(
+        engine="davinci-whisper-1",
+        prompt=f"Transcribe the following audio file: {audio_path}",
+        temperature=0,
+        max_tokens=1024,
+    )
 
-def transcribe_audio_to_text(filename):
-    # Use OpenAI to transcribe the audio file
-    headers = {
-        'Authorization': f'Bearer {config.whisper_api_key}',
-        'Content-Type': 'audio/wav'
-    }
-    with open(filename, 'rb') as f:
-        response = requests.post(
-            'https://api.openai.com/v1/speech-to-text',
-            headers=headers,
-            data=f
-        )
-    response_text = json.loads(response.text)
-    return response_text['text']
+    return response.choices[0].text.strip()
 
-
+# Define function for generating text response using OpenAI GPT-3 API
 def generate_response(prompt):
     response = openai.Completion.create(
-        engine="text-davinci-002",
+        engine="davinci",
         prompt=prompt,
-        max_tokens=4000,
-        n=1,
-        stop="\n",
-        temperature=0.9,
+        temperature=0.5,
+        max_tokens=1024,
     )
-    return response["choices"][0]["text"]
 
+    return response.choices[0].text.strip()
 
-def speak_text(text):
-    engine.say(text)
-    engine.runAndWait()
-
-
+# Define main function for running the voice assistant
 def main():
     while True:
-        # wait for user to say sarah
-        print("Say Sarah! to start recording")
+        # Listen for trigger word
+        print("Listening for trigger word...")
+        recording = sd.rec(int(DURATION * SAMPLE_RATE), samplerate=SAMPLE_RATE, channels=1)
+        sd.wait()
+        sf.write("input.wav", recording, SAMPLE_RATE)
 
-        with sr.Microphone() as source:
-            recognizer = sr.Recognizer()
-            print("Say Sarah!")
-            audio = recognizer.listen(source)
-            try:
-                transcription = recognizer.recognize_google(audio)
-                if transcription.lower() == "sarah":
-                    # record audio
-                    filename = "input.wav"
-                    print("i'm listening Dre")
-                    speak_text("I'm listening Dre")
-                    with sr.Microphone() as source:
-                        source.adjust_for_ambient_noise(source)
-                        source.pause_threshold = 2
-                        audio = recognizer.listen(source, phrase_time_limit=None, timeout=None)
-                        with open(filename, "wb") as f:
-                            f.write(audio.get_wav_data())
+        transcription = transcribe_audio_to_text("input.wav")
 
-                    # Transcribe Audio to Text
-                    text = transcribe_audio_to_text(filename)
-                    if text:
-                        print("papi you said:", text)
+        if TRIGGER_WORD in transcription.lower():
+            # Play activation phrase
+            print("Trigger word detected. Activating voice assistant...")
+            os.system(f"say {ACTIVATION_PHRASE}")
 
-                        # Generate Response using GPT-3
-                        response = generate_response(text)
-                        print("GPT-3 says:", response)
+            # Listen for user input
+            print("Listening for user input...")
+            recording = sd.rec(int(DURATION * SAMPLE_RATE), samplerate=SAMPLE_RATE, channels=1)
+            sd.wait()
+            sf.write("input.wav", recording, SAMPLE_RATE)
 
-                        # read response using text to speech
-                        speak_text(response)
-            except Exception as e:
-                print("\n an error occured: {}".format(e))
+            # Transcribe user input to text
+            text = transcribe_audio_to_text("input.wav")
+            print(f"User input: {text}")
 
+            # Generate response
+            response = generate_response(text)
+            print(f"Response: {response}")
 
+            # Output response as audio
+            os.system(f"say {response}")
+            
 if __name__ == "__main__":
     main()
