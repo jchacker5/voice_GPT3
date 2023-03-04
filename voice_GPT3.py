@@ -2,18 +2,11 @@ import openai
 import pyttsx3
 import speech_recognition as sr
 import config
-import whisper
+import requests
+import json
 
-# OpenAI API Key
-openai.api_secret_key = config.whisper_api_key
-# Set Whisper API Key
-whisper_api_key = config.whisper_api_key
-model = whisper.load_model("base")
-
-# Set up the Whisper API client
-whisper = openai.api_client(api_key=config.whisper_api_key)
-whisper = openai.api_client(api_key=whisper_api_key)
-
+# Set up the OpenAI API client
+openai.api_key = config.whisper_api_key
 
 # intialize text to speech engine
 engine = pyttsx3.init()
@@ -21,18 +14,24 @@ engine.setProperty('rate', 150)
 
 
 def transcribe_audio_to_text(filename):
-    # Use whisper to transcribe the audio file
-    response = whisper.speech_to_text(
-        audio=open(filename, "rb"),
-        model="commercial",
-        language="en-US"
-    )
-    return response["text"]
+    # Use OpenAI to transcribe the audio file
+    headers = {
+        'Authorization': f'Bearer {config.whisper_api_key}',
+        'Content-Type': 'audio/wav'
+    }
+    with open(filename, 'rb') as f:
+        response = requests.post(
+            'https://api.openai.com/v1/speech-to-text',
+            headers=headers,
+            data=f
+        )
+    response_text = json.loads(response.text)
+    return response_text['text']
 
 
 def generate_response(prompt):
     response = openai.Completion.create(
-        engine="text-davinci-013",
+        engine="text-davinci-002",
         prompt=prompt,
         max_tokens=4000,
         n=1,
@@ -71,13 +70,13 @@ def main():
                             f.write(audio.get_wav_data())
 
                     # Transcribe Audio to Text
-                    text = model.transcribe(filename)
+                    text = transcribe_audio_to_text(filename)
                     if text:
                         print("papi you said:", text)
 
                         # Generate Response using GPT-3
                         response = generate_response(text)
-                        print("GPT-3 says: {response}")
+                        print("GPT-3 says:", response)
 
                         # read response using text to speech
                         speak_text(response)
